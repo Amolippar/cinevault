@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /profile/
+Disallow: /history/
+Disallow: /watchlist/
+
+Sitemap: https://cinevault.example.com/sitemap.xml

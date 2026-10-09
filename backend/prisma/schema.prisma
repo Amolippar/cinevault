@@ -1,0 +1,261 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ContentRightsStatus {
+  PUBLIC_DOMAIN
+  OWNED_CONTENT
+  LICENSED
+  AUTHORIZED_PROVIDER
+  TRAILER_ONLY
+  UNVERIFIED
+}
+
+enum PublicationStatus {
+  DRAFT
+  RIGHTS_REVIEW
+  APPROVED
+  PUBLISHED
+  UNPUBLISHED
+}
+
+enum CastRole {
+  ACTOR
+  DIRECTOR
+  WRITER
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String
+  name         String
+  role         Role           @default(USER)
+  avatarUrl    String?
+  bio          String?
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  reviews         Review[]
+  watchlist       Watchlist[]
+  watchHistory    WatchHistory[]
+  ratings         Rating[]
+  adminActions    AdminAction[]
+  rightsAuditLogs RightsAuditLog[]
+
+  @@index([email])
+}
+
+model Movie {
+  id                      String              @id @default(uuid())
+  title                   String
+  slug                    String              @unique
+  originalTitle           String?
+  description             String
+  releaseYear             Int
+  releaseDate             DateTime?
+  durationMinutes         Int
+  director                String?
+  rating                  Float               @default(0.0)
+  ratingsCount            Int                 @default(0)
+  posterUrl               String
+  backdropUrl             String?
+  trailerUrl              String
+  videoSourceUrl          String?             // Direct video streaming file (PUBLIC_DOMAIN / OWNED_CONTENT / LICENSED only)
+  externalStreamUrl       String?             // External streaming URL (AUTHORIZED_PROVIDER)
+  sourceProvider          String?             // Source / Provider (e.g. "Internet Archive", "Paramount+", "Independent Studio")
+  contentRightsStatus     ContentRightsStatus @default(UNVERIFIED)
+  publicationStatus       PublicationStatus   @default(DRAFT)
+  rightsHolder            String?             // Legal owner / archive entity
+  licenseDocument         String?             // Agreement reference, certificate URL, or deed
+  licenseStartDate        DateTime?           // Distribution license commencement date
+  licenseEndDate          DateTime?           // Expiration date (auto-disables streaming if expired)
+  ownershipConfirmed      Boolean             @default(false) // Required for OWNED_CONTENT
+  licenseNotes            String              // Legal explanation & public domain / rights justification
+  language                String              @default("English")
+  country                 String              @default("United States")
+  isFeatured              Boolean             @default(false)
+  isTrending              Boolean             @default(false)
+  viewCount               Int                 @default(0)
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  genres                  MovieGenre[]
+  castMembers             MovieCast[]
+  reviews                 Review[]
+  watchlists              Watchlist[]
+  watchHistories          WatchHistory[]
+  ratings                 Rating[]
+  rightsAuditLogs         RightsAuditLog[]
+
+  @@index([slug])
+  @@index([releaseYear])
+  @@index([contentRightsStatus])
+  @@index([publicationStatus])
+  @@index([rating])
+  @@index([isFeatured])
+  @@index([isTrending])
+}
+
+model Genre {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  slug        String       @unique
+  description String?
+  icon        String?
+  movies      MovieGenre[]
+
+  @@index([slug])
+}
+
+model MovieGenre {
+  id        String   @id @default(uuid())
+  movieId   String
+  genreId   String
+  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  genre     Genre    @relation(fields: [genreId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([movieId, genreId])
+  @@index([movieId])
+  @@index([genreId])
+}
+
+model Cast {
+  id         String      @id @default(uuid())
+  name       String
+  roleType   CastRole    @default(ACTOR)
+  profileUrl String?
+  bio        String?
+  movies     MovieCast[]
+
+  @@index([name])
+}
+
+model MovieCast {
+  id            String   @id @default(uuid())
+  movieId       String
+  castId        String
+  characterName String?
+  role          CastRole @default(ACTOR)
+  order         Int      @default(0)
+  movie         Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  cast          Cast     @relation(fields: [castId], references: [id], onDelete: Cascade)
+
+  @@unique([movieId, castId, role])
+  @@index([movieId])
+  @@index([castId])
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  userId     String
+  movieId    String
+  rating     Int
+  content    String
+  isApproved Boolean  @default(true)
+  isFlagged  Boolean  @default(false)
+  flagReason String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie      Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@index([movieId])
+  @@index([userId])
+  @@index([isApproved])
+}
+
+model Rating {
+  id        String   @id @default(uuid())
+  userId    String
+  movieId   String
+  score     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@index([movieId])
+  @@index([userId])
+}
+
+model Watchlist {
+  id        String   @id @default(uuid())
+  userId    String
+  movieId   String
+  addedAt   DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@index([userId])
+  @@index([movieId])
+}
+
+model WatchHistory {
+  id                   String   @id @default(uuid())
+  userId               String
+  movieId              String
+  progressSeconds      Int      @default(0)
+  durationSeconds      Int      @default(0)
+  completionPercentage Float    @default(0.0)
+  lastWatchedAt        DateTime @default(now())
+
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie                Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@index([userId])
+  @@index([movieId])
+  @@index([lastWatchedAt])
+}
+
+model RightsAuditLog {
+  id                String              @id @default(uuid())
+  adminId           String
+  movieId           String
+  action            String              // e.g. "RIGHTS_STATUS_CHANGED", "PUBLISHED", "AUTO_EXPIRED_UNPUBLISHED"
+  rightsStatus      ContentRightsStatus
+  publicationStatus PublicationStatus
+  reason            String              // Mandatory audit explanation
+  createdAt         DateTime            @default(now())
+
+  admin             User                @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  movie             Movie               @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([movieId])
+  @@index([createdAt])
+}
+
+model AdminAction {
+  id         String   @id @default(uuid())
+  adminId    String
+  actionType String
+  targetType String
+  targetId   String
+  details    String?
+  createdAt  DateTime @default(now())
+
+  admin      User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([actionType])
+}
